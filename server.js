@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import pkg from "@google/generative-ai";
 
 dotenv.config();
 
@@ -19,7 +19,7 @@ app.post("/analyze", async (req, res) => {
 
     // ✅ FIXED MODEL
     const model = genAI.getGenerativeModel({
-     model: "gemini-1.5-flash",
+   const { GoogleGenerativeAI } = pkg;
     });
 
     const prompt = `
