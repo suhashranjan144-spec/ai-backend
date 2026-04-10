@@ -17,10 +17,9 @@ app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
 
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-    });
-
+  const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash-latest",
+});
     const prompt = `
 You are a medical assistant.
 
