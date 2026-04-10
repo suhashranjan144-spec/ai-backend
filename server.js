@@ -10,6 +10,7 @@ app.use(cors());
 app.use(express.json());
 
 // Google AI Setup
+// GEMINI_API_KEY environment variable check karein Render par
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.post("/analyze", async (req, res) => {
@@ -20,32 +21,40 @@ app.post("/analyze", async (req, res) => {
       return res.status(400).json({ error: "Text field is required" });
     }
 
-    // Model select karein (SDK automatically versioning handle karta hai)
-    const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
-        generationConfig: { responseMimeType: "application/json" }
-    });
+    // "gemini-1.5-flash" ki jagah "gemini-pro" use karke dekhte hain 
+    // kyunki aapke region/account mein flash shayad v1beta par available nahi hai
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-    const prompt = `Extract symptoms and medicines as JSON from this text: "${text}". 
-    Format: {"symptoms": [], "medicines": []}`;
+    const prompt = `You are a medical assistant. Extract symptoms and medicines from the following text and return ONLY a valid JSON object.
+    
+    Text: "${text}"
+    
+    JSON Format:
+    {
+      "symptoms": [],
+      "medicines": []
+    }`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const outputText = response.text();
 
-    // JSON Parse karke bhejein
+    // Clean JSON parsing: Kabhi-kabhi AI markdown (```json) bhej deta hai
+    const cleanJSON = outputText.replace(/```json|```/g, "").trim();
+    
     try {
-      const jsonResponse = JSON.parse(outputText);
+      const jsonResponse = JSON.parse(cleanJSON);
       res.json(jsonResponse);
     } catch (parseError) {
-      res.json({ result: outputText });
+      // Agar parse fail hua toh raw text bhej do debug ke liye
+      res.json({ result: cleanJSON });
     }
 
   } catch (error) {
-    console.error("Error details:", error);
+    console.error("API Error:", error);
     res.status(500).json({ 
-        error: "AI Response failed", 
-        message: error.message 
+      error: "AI Response failed", 
+      message: error.message 
     });
   }
 });
