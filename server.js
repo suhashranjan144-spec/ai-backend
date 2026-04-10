@@ -17,9 +17,11 @@ app.post("/analyze", (req, res) => {
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
+    
+    // 🔥 URL FIX: v1 use kar rahe hain aur model gemini-1.5-flash
     const options = {
         hostname: 'generativelanguage.googleapis.com',
-        path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        path: `/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -29,13 +31,13 @@ app.post("/analyze", (req, res) => {
     const apiBody = JSON.stringify({
         contents: [{
             parts: [{
-                text: `Extract symptoms and medicines as JSON from: "${text}". 
-                Format: {"symptoms": [], "medicines": []}`
+                text: `Extract symptoms and medicines as JSON from this text: "${text}". 
+                Response must be ONLY valid JSON like this: {"symptoms": [], "medicines": []}. 
+                Do not include markdown or extra text.`
             }]
         }],
         generationConfig: {
-            temperature: 0.1,
-            responseMimeType: "application/json"
+            temperature: 0.1
         }
     });
 
@@ -45,13 +47,21 @@ app.post("/analyze", (req, res) => {
         response.on('end', () => {
             try {
                 const parsedData = JSON.parse(data);
+                
+                // Gemini API ka standard path check kar rahe hain
                 if (parsedData.candidates && parsedData.candidates[0]?.content?.parts?.[0]?.text) {
-                    res.json(JSON.parse(parsedData.candidates[0].content.parts[0].text));
+                    const aiText = parsedData.candidates[0].content.parts[0].text;
+                    // AI kabhi kabhi text ke sath JSON bhejta hai, use parse karke clean bhejna hai
+                    try {
+                        res.json(JSON.parse(aiText));
+                    } catch (e) {
+                        res.json({ result: aiText });
+                    }
                 } else {
                     res.status(500).json({ error: "AI response error", details: parsedData });
                 }
             } catch (e) {
-                res.status(500).json({ error: "Parsing error", message: e.message });
+                res.status(500).json({ error: "Parsing error", message: e.message, raw: data });
             }
         });
     });
