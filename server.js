@@ -19,7 +19,7 @@ app.post("/analyze", async (req, res) => {
 
     // ✅ FIXED MODEL
     const model = genAI.getGenerativeModel({
-      model: "gemini-pro",
+     model: "gemini-1.5-flash",
     });
 
     const prompt = `
