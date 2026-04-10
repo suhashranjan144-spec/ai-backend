@@ -1,9 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import pkg from "@google/generative-ai";
-
-const { GoogleGenerativeAI } = pkg; // ✅ FIX (yahi missing tha)
+import { GoogleGenerativeAI } from "@google/generative-ai"; // ✅ DIRECT IMPORT
 
 dotenv.config();
 
@@ -11,17 +9,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔥 Gemini init
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-// 🔥 API
 app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
 
-    // ✅ STABLE MODEL
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.0-pro",
+      model: "gemini-1.5-flash", // ✅ WORKING MODEL
     });
 
     const prompt = `
@@ -41,10 +36,8 @@ Return ONLY JSON:
 `;
 
     const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const output = response.text();
+    const output = result.response.text();
 
-    // 🔥 clean JSON (important)
     const cleaned = output
       .replace(/```json/g, "")
       .replace(/```/g, "")
@@ -53,11 +46,11 @@ Return ONLY JSON:
     let json;
     try {
       json = JSON.parse(cleaned);
-    } catch (e) {
+    } catch {
       return res.json({
         symptoms: [],
         medicines: [],
-        raw: output, // debug ke liye
+        raw: output,
       });
     }
 
@@ -69,7 +62,9 @@ Return ONLY JSON:
   }
 });
 
-// 🔥 server start
-app.listen(3000, () => {
-  console.log("🚀 Server running on port 3000");
+// ✅ IMPORTANT (Render ke liye)
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
