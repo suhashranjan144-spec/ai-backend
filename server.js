@@ -19,38 +19,46 @@ app.post("/analyze", async (req, res) => {
         headers: {
           "Content-Type": "application/json",
         },
+
+        // 🔥 YAHI CHANGE KIYA HAI (BODY)
         body: JSON.stringify({
           contents: [
             {
+              role: "user",
               parts: [
                 {
-                  text: `
-You are a medical assistant.
+                  text: `You are a medical assistant.
 
-Extract symptoms and medicines from the following text.
+Extract symptoms and medicines from the text below.
 
 Text: ${text}
 
-Strictly return JSON like this:
+Return response strictly in JSON format like:
 {
   "symptoms": ["..."],
   "medicines": ["..."]
 }
-
-Do not return anything else.
 `,
                 },
               ],
             },
           ],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 200,
+          },
         }),
       }
     );
 
     const data = await response.json();
 
-    const output =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response from AI";
+    // 🔥 SAFE OUTPUT HANDLING
+    let output = "No response from AI";
+
+    if (data.candidates && data.candidates.length > 0) {
+      output = data.candidates[0].content.parts[0].text;
+    }
 
     res.json({ result: output });
 
