@@ -3,6 +3,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import pkg from "@google/generative-ai";
 
+const { GoogleGenerativeAI } = pkg; // ✅ FIX (yahi missing tha)
+
 dotenv.config();
 
 const app = express();
@@ -17,9 +19,9 @@ app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
 
-    // ✅ FIXED MODEL
+    // ✅ STABLE MODEL
     const model = genAI.getGenerativeModel({
-   const { GoogleGenerativeAI } = pkg;
+      model: "gemini-1.0-pro",
     });
 
     const prompt = `
@@ -39,7 +41,8 @@ Return ONLY JSON:
 `;
 
     const result = await model.generateContent(prompt);
-    const output = result.response.text();
+    const response = await result.response;
+    const output = response.text();
 
     // 🔥 clean JSON (important)
     const cleaned = output
@@ -54,13 +57,14 @@ Return ONLY JSON:
       return res.json({
         symptoms: [],
         medicines: [],
-        raw: output,
+        raw: output, // debug ke liye
       });
     }
 
     res.json(json);
 
   } catch (e) {
+    console.error(e);
     res.status(500).json({ error: e.message });
   }
 });
