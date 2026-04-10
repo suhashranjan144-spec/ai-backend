@@ -16,7 +16,7 @@ app.post("/analyze", async (req, res) => {
     const { text } = req.body;
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash", // ✅ WORKING MODEL
+      model: "gemini-1.0-pro", // ✅ WORKING MODEL
     });
 
     const prompt = `
