@@ -24,7 +24,21 @@ app.post("/analyze", async (req, res) => {
             {
               parts: [
                 {
-                  text: `Extract symptoms and medicines from this:\n${text}\nReturn JSON only.`,
+                  text: `
+You are a medical assistant.
+
+Extract symptoms and medicines from the following text.
+
+Text: ${text}
+
+Strictly return JSON like this:
+{
+  "symptoms": ["..."],
+  "medicines": ["..."]
+}
+
+Do not return anything else.
+`,
                 },
               ],
             },
@@ -36,7 +50,7 @@ app.post("/analyze", async (req, res) => {
     const data = await response.json();
 
     const output =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      data?.candidates?.[0]?.content?.parts?.[0]?.text || "No response from AI";
 
     res.json({ result: output });
 
