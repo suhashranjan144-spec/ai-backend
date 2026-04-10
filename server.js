@@ -9,57 +9,41 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Google AI Setup
-// GEMINI_API_KEY environment variable check karein Render par
+// API Key check karne ke liye log
+if (!process.env.GEMINI_API_KEY) {
+  console.error("❌ API Key missing in Environment Variables!");
+}
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
+    if (!text) return res.status(400).json({ error: "Text is required" });
 
-    if (!text) {
-      return res.status(400).json({ error: "Text field is required" });
-    }
+    // Yaha hum "gemini-1.5-flash" use kar rahe hain jo sabse latest hai
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    // "gemini-1.5-flash" ki jagah "gemini-pro" use karke dekhte hain 
-    // kyunki aapke region/account mein flash shayad v1beta par available nahi hai
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-
-    const prompt = `You are a medical assistant. Extract symptoms and medicines from the following text and return ONLY a valid JSON object.
-    
-    Text: "${text}"
-    
-    JSON Format:
-    {
-      "symptoms": [],
-      "medicines": []
-    }`;
+    const prompt = `Extract symptoms and medicines as JSON: "${text}". 
+    Format: {"symptoms": [], "medicines": []}`;
 
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const outputText = response.text();
+    const output = response.text();
 
-    // Clean JSON parsing: Kabhi-kabhi AI markdown (```json) bhej deta hai
-    const cleanJSON = outputText.replace(/```json|```/g, "").trim();
-    
-    try {
-      const jsonResponse = JSON.parse(cleanJSON);
-      res.json(jsonResponse);
-    } catch (parseError) {
-      // Agar parse fail hua toh raw text bhej do debug ke liye
-      res.json({ result: cleanJSON });
-    }
+    // Clean JSON parsing
+    const cleanJSON = output.replace(/```json|```/g, "").trim();
+    res.json(JSON.parse(cleanJSON));
 
   } catch (error) {
-    console.error("API Error:", error);
+    console.error("Detailed Error:", error);
     res.status(500).json({ 
-      error: "AI Response failed", 
-      message: error.message 
+      error: "Backend Error", 
+      message: error.message,
+      suggestion: "Check if your API Key is active and supports Gemini 1.5 Flash"
     });
   }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Server on ${PORT}`));
