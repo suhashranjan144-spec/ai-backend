@@ -11,6 +11,29 @@ app.use(express.json());
 const API_KEY = process.env.GEMINI_API_KEY;
 const MODEL = "gemini-2.5-flash";
 
+// 🔥 SIMPLE DB FUNCTION
+function searchDatabase(symptoms) {
+  let medicines = [];
+
+  const map = {
+    fever: ["paracetamol"],
+    headache: ["brufen"],
+    anxiety: ["ignatia", "aconite"],
+    "night sweats": ["silicea"],
+  };
+
+  symptoms.forEach((sym) => {
+    const key = sym.toLowerCase();
+    if (map[key]) {
+      medicines.push(...map[key]);
+    }
+  });
+
+  return {
+    medicines: [...new Set(medicines)],
+  };
+}
+
 app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
@@ -19,25 +42,7 @@ app.post("/analyze", async (req, res) => {
       return res.status(400).json({ error: "Text is required" });
     }
 
-    // 🔥 STEP 1: FAKE DB LOGIC (replace later with real DB)
-    const dbSymptoms = [];
-    const dbMedicines = [];
-
-    if (text.includes("bukhar")) {
-      dbSymptoms.push("fever");
-      dbMedicines.push("paracetamol");
-    }
-
-    // 👉 DB confidence
-    if (dbSymptoms.length > 0) {
-      return res.json({
-        source: "database",
-        symptoms: dbSymptoms,
-        medicines: dbMedicines,
-      });
-    }
-
-    // 🔥 STEP 2: GEMINI FALLBACK
+    // 🔥 STEP 1: GEMINI FIRST (70%)
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
 
     const response = await fetch(API_URL, {
@@ -53,7 +58,7 @@ app.post("/analyze", async (req, res) => {
                 text: `
 You are a medical assistant.
 
-Extract symptoms and medicines from the following text.
+Extract symptoms and suggest possible medicines.
 
 Text: ${text}
 
@@ -81,10 +86,10 @@ Return strictly JSON:
 
     const clean = aiText.replace(/```json|```/g, "").trim();
 
-    let parsed;
+    let aiResponse;
 
     try {
-      parsed = JSON.parse(clean);
+      aiResponse = JSON.parse(clean);
     } catch {
       return res.json({
         source: "gemini_raw",
@@ -92,9 +97,33 @@ Return strictly JSON:
       });
     }
 
-    res.json({
-      source: "gemini",
-      ...parsed,
+    // 🔥 STEP 2: HYBRID LOGIC (30% DB SUPPORT)
+
+    let finalMedicines = aiResponse.medicines || [];
+
+    // 👉 अगर AI ने medicine नहीं दिया → DB से लो
+    if (!finalMedicines || finalMedicines.length === 0) {
+      const dbResult = searchDatabase(aiResponse.symptoms || []);
+
+      return res.json({
+        source: "ai+database",
+        symptoms: aiResponse.symptoms || [],
+        medicines: dbResult.medicines,
+      });
+    }
+
+    // 👉 अगर AI ने दिया → DB से enhance करो (optional)
+    const dbResult = searchDatabase(aiResponse.symptoms || []);
+
+    finalMedicines = [
+      ...new Set([...finalMedicines, ...dbResult.medicines]),
+    ];
+
+    // 🔥 FINAL RESPONSE
+    return res.json({
+      source: "gemini+database",
+      symptoms: aiResponse.symptoms || [],
+      medicines: finalMedicines,
     });
 
   } catch (error) {
