@@ -33,7 +33,6 @@ function searchDatabase(symptoms) {
     medicines: [...new Set(medicines)],
   };
 }
-
 app.post("/analyze", async (req, res) => {
   try {
     const { text } = req.body;
@@ -42,7 +41,6 @@ app.post("/analyze", async (req, res) => {
       return res.status(400).json({ error: "Text is required" });
     }
 
-    // 🔥 STEP 1: GEMINI FIRST (70%)
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}`;
 
     const response = await fetch(API_URL, {
@@ -56,13 +54,14 @@ app.post("/analyze", async (req, res) => {
             parts: [
               {
                 text: `
-You are a medical assistant.
+You are a STRICT JSON medical assistant.
 
-Extract symptoms and suggest possible medicines.
+Extract symptoms and medicines.
 
 Text: ${text}
 
-Return strictly JSON:
+ONLY return valid JSON. No explanation.
+
 {
   "symptoms": [],
   "medicines": []
@@ -73,57 +72,75 @@ Return strictly JSON:
           },
         ],
         generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 200,
+          temperature: 0.2,
         },
       }),
     });
 
     const data = await response.json();
 
-    const aiText =
+    let aiText =
       data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    const clean = aiText.replace(/```json|```/g, "").trim();
+    // 🔥 CLEAN RESPONSE (VERY IMPORTANT)
+    aiText = aiText
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+
+    // 🔥 JSON EXTRACT (SUPER SAFE)
+    const jsonMatch = aiText.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      return res.json({
+        source: "gemini_raw",
+        raw: aiText,
+      });
+    }
 
     let aiResponse;
 
     try {
-      aiResponse = JSON.parse(clean);
-    } catch {
+      aiResponse = JSON.parse(jsonMatch[0]);
+    } catch (err) {
       return res.json({
-        source: "gemini_raw",
-        result: clean,
+        source: "gemini_parse_error",
+        raw: aiText,
       });
     }
 
-    // 🔥 STEP 2: HYBRID LOGIC (30% DB SUPPORT)
+    // 🔥 DB SEARCH
+    const dbResult = searchDatabase(aiResponse.symptoms || []);
 
     let finalMedicines = aiResponse.medicines || [];
 
-    // 👉 अगर AI ने medicine नहीं दिया → DB से लो
-    if (!finalMedicines || finalMedicines.length === 0) {
-      const dbResult = searchDatabase(aiResponse.symptoms || []);
+    let source = "gemini";
 
-      return res.json({
-        source: "ai+database",
-        symptoms: aiResponse.symptoms || [],
-        medicines: dbResult.medicines,
-      });
+    if (!finalMedicines || finalMedicines.length === 0) {
+      finalMedicines = dbResult.medicines;
+      source = "ai+database";
+    } else {
+      finalMedicines = [
+        ...new Set([...finalMedicines, ...dbResult.medicines]),
+      ];
+      source = "gemini+database";
     }
 
-    // 👉 अगर AI ने दिया → DB से enhance करो (optional)
-    const dbResult = searchDatabase(aiResponse.symptoms || []);
-
-    finalMedicines = [
-      ...new Set([...finalMedicines, ...dbResult.medicines]),
-    ];
-
-    // 🔥 FINAL RESPONSE
+    // 🔥 FINAL DEBUG RESPONSE
     return res.json({
-      source: "gemini+database",
-      symptoms: aiResponse.symptoms || [],
-      medicines: finalMedicines,
+      source,
+      input: text,
+
+      debug: {
+        ai_raw_text: aiText,
+        ai_response: aiResponse,
+        db_result: dbResult,
+      },
+
+      final: {
+        symptoms: aiResponse.symptoms || [],
+        medicines: finalMedicines,
+      },
     });
 
   } catch (error) {
@@ -134,8 +151,3 @@ Return strictly JSON:
   }
 });
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on ${PORT}`);
-});
